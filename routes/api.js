@@ -8,7 +8,7 @@ dotenv.config();
 
 const router = express.Router();
 
-const PROXY_URL = process.env.PROXY_URL || 'https://stock-price-checker-proxy.freecodecamp.rocks';
+const PROXY_URL = (process.env.PROXY_URL || 'https://stock-price-checker-proxy.freecodecamp.rocks').trim();
 const IP_SALT = process.env.IP_SALT || 'salt';
 
 // --- Mongoose Model ---
@@ -29,18 +29,13 @@ function normalizeSymbol(s) {
 }
 
 function anonymizeIp(ipRaw) {
-  // Truncado + hash -> cumple con “anonymize before saving”
-  // Ej.: ::ffff:192.168.1.55 => 192.168.1.0
-  //     2001:0db8:85a3::8a2e:0370:7334 => 2001:0db8:85a3:: (truncado grosero)
   const ip = String(ipRaw || '');
   let truncated = ip;
 
-  // IPv4
   const m4 = ip.match(/(\d+)\.(\d+)\.(\d+)\.(\d+)/);
   if (m4) {
     truncated = `${m4[1]}.${m4[2]}.${m4[3]}.0`;
   } else {
-    // IPv6 (muy básico)
     const idx = ip.indexOf(':');
     truncated = idx > 0 ? ip.slice(0, idx + 1) : ip;
   }
@@ -48,18 +43,40 @@ function anonymizeIp(ipRaw) {
   return crypto.createHash('sha256').update(IP_SALT + truncated).digest('hex');
 }
 
-async function fetchQuote(symbol) {
-  const url = `${PROXY_URL}/v1/stock/${encodeURIComponent(symbol)}/quote`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Proxy error ${res.status}`);
-  const data = await res.json();
+// --- Proxy fetch robusto ---
+async function fetchQuote(symbolRaw) {
+  const symbol = normalizeSymbol(symbolRaw);
 
-  // Esperamos propiedades { symbol, latestPrice }
-  if (!data || !data.symbol || typeof data.latestPrice !== 'number') {
-    throw new Error('Malformed proxy response');
+  // Usamos URL para evitar dobles barras y normalizar la base
+  const makeUrl = (path) => new URL(path, PROXY_URL).toString();
+
+  // Intentamos variantes por si el proxy es estricto con slashes
+  const candidates = [
+    `/v1/stock/${encodeURIComponent(symbol)}/quote`,
+    `/v1/stock/${encodeURIComponent(symbol)}/quote/`
+  ];
+
+  let lastErr = null;
+  for (const path of candidates) {
+    try {
+      const url = makeUrl(path);
+      const res = await fetch(url);
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(`Proxy ${res.status} on ${url} :: ${txt.slice(0, 200)}`);
+      }
+      const data = await res.json();
+
+      if (!data || !data.symbol || typeof data.latestPrice !== 'number') {
+        throw new Error(`Malformed proxy response: ${JSON.stringify(data).slice(0, 200)}`);
+      }
+
+      return { symbol: data.symbol.toUpperCase(), price: data.latestPrice };
+    } catch (e) {
+      lastErr = e; // probamos la siguiente variante
+    }
   }
-
-  return { symbol: data.symbol.toUpperCase(), price: data.latestPrice };
+  throw lastErr || new Error('Proxy unreachable');
 }
 
 async function likeIfNeeded(symbol, ipHash, likeFlag) {
@@ -67,7 +84,6 @@ async function likeIfNeeded(symbol, ipHash, likeFlag) {
 
   const doc = await Stock.findOne({ symbol });
   if (!doc) {
-    // crear registro
     const initial = likeFlag ? 1 : 0;
     const ips = likeFlag ? [ipHash] : [];
     const created = await Stock.create({ symbol, likes: initial, ipHashes: ips });
@@ -123,7 +139,7 @@ router.get('/stock-prices', async (req, res) => {
       return res.json({ stockData });
     }
   } catch (err) {
-    // Para no filtrar detalles internos:
+    console.error('[stock-prices]', err?.message || err);
     return res.status(500).json({ error: 'Internal Server Error', detail: err.message });
   }
 });
