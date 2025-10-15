@@ -71,6 +71,9 @@ app.get('/', (req, res) => {
     </html>`);
 });
 
+app.get('/style.css', (_req, res) => {
+  res.type('text/css').send('/* minimal */ body{font-family:system-ui,Segoe UI,Arial,sans-serif;}');
+});
 
 const PORT = process.env.PORT || 3000;
 if (process.env.NODE_ENV !== 'test') {
