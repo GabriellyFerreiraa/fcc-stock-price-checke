@@ -54,9 +54,23 @@ mongoose
 app.use('/api', apiRouter);
 
 // Raíz: sirve para que FCC lea los headers CSP en una 200
-app.get('/', (_req, res) => {
-  res.type('text').send('Stock Price Checker – freeCodeCamp');
+app.get('/', (req, res) => {
+  res.set('Content-Security-Policy', 
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+  );
+  res.send(`<!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <title>Stock Price Checker - freeCodeCamp</title>
+      <link rel="stylesheet" href="/style.css">
+    </head>
+    <body>
+      <h1>Stock Price Checker - freeCodeCamp</h1>
+    </body>
+    </html>`);
 });
+
 
 const PORT = process.env.PORT || 3000;
 if (process.env.NODE_ENV !== 'test') {
