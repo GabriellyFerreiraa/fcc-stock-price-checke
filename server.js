@@ -3,19 +3,13 @@ import helmet from 'helmet';
 import cors from 'cors';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-
 import apiRouter from './routes/api.js';
 
 dotenv.config();
 
 const app = express();
 
-/**
- * ✅ Content Security Policy:
- *  - SOLO permite scripts y CSS desde TU servidor ('self')
- *  - Bloquea iframes y objetos
- *  - Permite imágenes locales y data: (por si pones un favicon inline)
- */
+/* ✅ CSP estricto: solo scripts y estilos desde 'self' */
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -38,27 +32,32 @@ app.use(
   })
 );
 
-// CORS opcional (tu API igual funciona sin exponer nada externo)
+/* ✅ Evitar 304 y asegurar que CSP siempre viaje */
+app.disable('etag');
+app.use((req, res, next) => {
+  res.set('Cache-Control', 'no-store'); // también evita caches intermedios
+  next();
+});
+
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Conexión a Mongo (Atlas o local)
+// Mongo
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/fcc-stock';
 mongoose
   .connect(MONGO_URI)
   .then(() => console.log('Mongo connected'))
-  .catch((err) => console.error('Mongo error:', err.message));
+  .catch(err => console.error('Mongo error:', err.message));
 
 // Rutas
 app.use('/api', apiRouter);
 
-// Raíz: cualquier respuesta sirve; lo importante es que incluya el header CSP
+// Raíz: sirve para que FCC lea los headers CSP en una 200
 app.get('/', (_req, res) => {
   res.type('text').send('Stock Price Checker – freeCodeCamp');
 });
 
-// Arranque
 const PORT = process.env.PORT || 3000;
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
