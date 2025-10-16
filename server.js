@@ -9,16 +9,19 @@ dotenv.config();
 
 const app = express();
 
-/* 1) Usa Helmet pero SIN su CSP interno */
+/* 1) Helmet SIN su CSP interno (para no sobrescribir la cabecera que
+      necesita freeCodeCamp en el test #2) */
 app.use(helmet({ contentSecurityPolicy: false }));
 
-/* 2) Fuerza SOLO las directivas que FCC valida (formato exacto) */
+/* 2) CSP EXACTA que valida freeCodeCamp (#2):
+      solo permitir scripts y estilos desde 'self' y con default-src */
+const FCC_CSP = "default-src 'self'; script-src 'self'; style-src 'self';";
 app.use((req, res, next) => {
-  res.set('Content-Security-Policy', "script-src 'self'; style-src 'self';");
+  res.set('Content-Security-Policy', FCC_CSP);
   next();
 });
 
-/* Evitar 304 y caches para que siempre viaje el header */
+/* 3) Evitar 304/caché para que siempre viaje la cabecera CSP */
 app.disable('etag');
 app.use((req, res, next) => {
   res.set('Cache-Control', 'no-store');
@@ -39,7 +42,7 @@ mongoose
 // Rutas API
 app.use('/api', apiRouter);
 
-// Página raíz en HTML (status 200)
+// Página raíz en HTML (status 200) — el test de FCC consulta aquí
 app.get('/', (_req, res) => {
   res.send(`<!DOCTYPE html>
   <html lang="en">
