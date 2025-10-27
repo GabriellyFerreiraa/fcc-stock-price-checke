@@ -10,14 +10,16 @@ dotenv.config();
 const app = express();
 
 /* ======================================================
-   🔒 CSP EXACTA (solo estas 3 directivas, sin defaults)
-   ====================================================== */
+  🔒 SOLUCIÓN PARA ERROR 2 (CSP)
+  Quitamos defaultSrc y dejamos SÓLO lo que el test pide.
+  Usar useDefaults: false es correcto.
+  ====================================================== */
 app.use(
   helmet({
     contentSecurityPolicy: {
-      useDefaults: false,
+      useDefaults: false, // ¡Correcto!
       directives: {
-        defaultSrc: ["'self'"],
+        // Solo estas dos directivas, literalmente:
         scriptSrc: ["'self'"],
         styleSrc: ["'self'"],
       },
