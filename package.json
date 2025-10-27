@@ -1,0 +1,34 @@
+{
+  "name": "fcc-stock-price-checker",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "mocha \"tests/**/*.js\" --exit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GabriellyFerreiraa/fcc-stock-price-checke.git"
+  },
+  "bugs": {
+    "url": "https://github.com/GabriellyFerreiraa/fcc-stock-price-checke/issues"
+  },
+  "homepage": "https://github.com/GabriellyFerreiraa/fcc-stock-price-checke#readme",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "mongoose": "^8.19.2",
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "chai": "^6.2.0",
+    "chai-http": "^5.1.2",
+    "mocha": "^11.7.4"
+  }
+}
