@@ -25,7 +25,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Evitar caché (para que el validador siempre lea la CSP correcta)
+// Evitar caché
 app.disable('etag');
 app.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 
@@ -45,14 +45,7 @@ if (MONGO_URI) {
 }
 
 /* ------------------------------------------------------------------
-   1) Montamos el boilerplate de FCC (NO editamos ese archivo)
-   ------------------------------------------------------------------ */
-fccTestingRoutes(app);
-console.log('[BOOT] Mounted FCC testing routes');
-
-/* ------------------------------------------------------------------
-   2) Añadimos endpoints “rápidos” para evitar cuelgues en Render
-      (si fallan, el boilerplate ya está montado igual)
+   ✅ 1) NUESTRAS RUTAS RÁPIDAS PRIMERO (para que tengan prioridad)
    ------------------------------------------------------------------ */
 app.get('/_api/ping', (_req, res) => {
   console.log('[PATCH] /_api/ping');
@@ -75,12 +68,21 @@ app.get('/_api/get-tests', (_req, res) => {
   }
 });
 
+/* Flag para no ejecutar Mocha dos veces */
+let testsRunning = false;
+
 app.get('/_api/run-tests', (_req, res) => {
   try {
-    console.log('[PATCH] /_api/run-tests -> starting runner');
+    console.log('[PATCH] /_api/run-tests -> request');
+    if (testsRunning) {
+      console.log('[PATCH] runner already running');
+      return res.json({ status: 'running' });
+    }
+    testsRunning = true;
     setTimeout(() => {
-      try { runner.run(); }
-      catch (e) { console.error('[PATCH] runner error:', e.message); }
+      try { runner.run(); } catch (e) { console.error('[PATCH] runner error:', e.message); }
+      // pequeña ventana para no repetir; el validador no necesita re-ejecutar
+      setTimeout(() => { testsRunning = false; }, 5000);
     }, 250);
     res.json({ status: 'running' });
   } catch (e) {
@@ -89,12 +91,18 @@ app.get('/_api/run-tests', (_req, res) => {
   }
 });
 
+/* ------------------------------------------------------------------
+   2) Luego montamos el boilerplate de FCC (por si lo necesitan)
+   ------------------------------------------------------------------ */
+fccTestingRoutes(app);
+console.log('[BOOT] Mounted FCC testing routes');
+
 /* ----------------- Página e API del proyecto ----------------- */
 app.get('/', (_req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
 
-app.use('/api', apiRoutes); // << asegúrate que routes/api.js exporta module.exports = router
+app.use('/api', apiRoutes);
 
 // Estáticos mínimos (opcional)
 app.get('/style.css', (_req, res) => {
@@ -110,11 +118,14 @@ app.listen(PORT, () => {
   console.log(`[BOOT] Server running on http://localhost:${PORT}`);
 
   if (process.env.NODE_ENV === 'test') {
-    console.log('[BOOT] Running Tests (on boot)...');
-    setTimeout(() => {
-      try { runner.run(); }
-      catch (e) { console.log('[BOOT] Tests are not valid:'); console.error(e); }
-    }, 1500);
+    console.log('[BOOT] Running Tests (on boot) ...');
+    if (!testsRunning) {
+      testsRunning = true;
+      setTimeout(() => {
+        try { runner.run(); } catch (e) { console.log('[BOOT] Tests invalid:'); console.error(e); }
+        setTimeout(() => { testsRunning = false; }, 5000);
+      }, 1500);
+    }
   }
 });
 
