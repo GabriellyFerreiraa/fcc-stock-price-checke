@@ -4,14 +4,20 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';   // ⬅️ para cargar CJS
 
+// Rutas propias (ESM)
 import apiRoutes from './routes/api.js';
-import fccTestingRoutes from './routes/fcctesting.js';
-import runner from './test-runner.js';
 
 dotenv.config();
 
+const require = createRequire(import.meta.url); // ⬅️ require en ESM
+// Estos dos son del boilerplate y suelen ser CommonJS:
+const fccTestingRoutes = require('./routes/fcctesting.js'); // module.exports = (app)=>{...}
+const runner = require('./test-runner.js');                 // exports.run = ()=>{...}
+
 const app = express();
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -35,7 +41,7 @@ app.use('/public', express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Mongo OPCIONAL (si no hay URI, usamos likes en memoria en routes/api.js)
+// Mongo OPCIONAL (si no hay URI, likes usan fallback en memoria dentro de routes/api.js)
 const MONGO_URI = process.env.MONGO_URI;
 if (MONGO_URI) {
   mongoose.connect(MONGO_URI)
@@ -45,18 +51,18 @@ if (MONGO_URI) {
   console.log('Mongo disabled (using in-memory likes)');
 }
 
-// Rutas especiales del runner FCC (deben estar habilitadas)
+// Rutas especiales del runner FCC
 fccTestingRoutes(app);
 
 // Página raíz del boilerplate
-app.route('/').get((_req, res) => {
+app.get('/', (_req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
 
 // API del proyecto
 app.use('/api', apiRoutes);
 
-// CSS/JS mínimos propios (por si fcc revisa que carguen desde self)
+// CSS/JS mínimos (cargados desde 'self' para confirmar CSP)
 app.get('/style.css', (_req, res) => {
   res.type('text/css').send('/* ok */ body{font-family:system-ui,Segoe UI,Arial,sans-serif;}');
 });
@@ -69,7 +75,6 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 
-  // Ejecutar los tests cuando FCC nos corre con NODE_ENV=test
   if (process.env.NODE_ENV === 'test') {
     console.log('Running Tests...');
     setTimeout(() => {
