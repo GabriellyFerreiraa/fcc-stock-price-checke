@@ -1,10 +1,6 @@
-import express from 'express';
-import mongoose from 'mongoose';
-import crypto from 'crypto';
-import fetch from 'node-fetch';
-import dotenv from 'dotenv';
-
-dotenv.config();
+const express = require('express');
+const mongoose = require('mongoose');
+const crypto = require('crypto');
 
 const router = express.Router();
 
@@ -20,7 +16,6 @@ const stockSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-
 const Stock = mongoose.models.Stock || mongoose.model('Stock', stockSchema);
 
 /* --- Fallback en memoria si Mongo no está disponible --- */
@@ -33,22 +28,23 @@ function anonymizeIp(ipRaw) {
   const ip = String(ipRaw || '');
   let truncated = ip;
   const m4 = ip.match(/(\d+)\.(\d+)\.(\d+)\.(\d+)/);
-  if (m4) {
-    truncated = `${m4[1]}.${m4[2]}.${m4[3]}.0`;
-  } else {
+  if (m4) truncated = `${m4[1]}.${m4[2]}.${m4[3]}.0`;
+  else {
     const idx = ip.indexOf(':');
     truncated = idx > 0 ? ip.slice(0, idx + 1) : ip;
   }
   return crypto.createHash('sha256').update(IP_SALT + truncated).digest('hex');
 }
 
+/* --- Fetch al proxy (Node 18+ trae fetch nativo) --- */
 async function fetchQuote(symbolRaw) {
   const symbol = normalizeSymbol(symbolRaw);
-  const makeUrl = (path) => new URL(path, PROXY_URL).toString();
+  const makeUrl = (p) => new URL(p, PROXY_URL).toString();
   const candidates = [
     `/v1/stock/${encodeURIComponent(symbol)}/quote`,
-    `/v1/stock/${encodeURIComponent(symbol)}/quote/`,
+    `/v1/stock/${encodeURIComponent(symbol)}/quote/`
   ];
+
   let lastErr = null;
   for (const path of candidates) {
     try {
@@ -60,7 +56,7 @@ async function fetchQuote(symbolRaw) {
       }
       const data = await res.json();
       if (!data || !data.symbol || typeof data.latestPrice !== 'number') {
-        throw new Error(`Malformed proxy response`);
+        throw new Error('Malformed proxy response');
       }
       return { symbol: data.symbol.toUpperCase(), price: data.latestPrice };
     } catch (e) {
@@ -70,6 +66,7 @@ async function fetchQuote(symbolRaw) {
   throw lastErr || new Error('Proxy unreachable');
 }
 
+/* --- Likes con fallback a memoria --- */
 async function likeIfNeeded(symbol, ipHash, likeFlag) {
   if (!mongoose.connection.readyState) {
     let entry = memoryStore.get(symbol);
@@ -91,6 +88,7 @@ async function likeIfNeeded(symbol, ipHash, likeFlag) {
     const created = await Stock.create({ symbol, likes: initial, ipHashes: ips });
     return { symbol, likes: created.likes };
   }
+
   if (likeFlag && !doc.ipHashes.includes(ipHash)) {
     doc.likes += 1;
     doc.ipHashes.push(ipHash);
@@ -119,18 +117,20 @@ router.get('/stock-prices', async (req, res) => {
       const [q1, q2] = await Promise.all([fetchQuote(s1), fetchQuote(s2)]);
       const [l1, l2] = await Promise.all([
         likeIfNeeded(q1.symbol, ipHash, like),
-        likeIfNeeded(q2.symbol, ipHash, like),
+        likeIfNeeded(q2.symbol, ipHash, like)
       ]);
+
       const rel = (a, b) => (a.likes || 0) - (b.likes || 0);
       const stockData = [
         { stock: q1.symbol, price: q1.price, rel_likes: rel(l1, l2) },
-        { stock: q2.symbol, price: q2.price, rel_likes: rel(l2, l1) },
+        { stock: q2.symbol, price: q2.price, rel_likes: rel(l2, l1) }
       ];
       return res.json({ stockData });
     } else {
       const s = normalizeSymbol(stock);
       const q = await fetchQuote(s);
       const l = await likeIfNeeded(q.symbol, ipHash, like);
+
       const stockData = { stock: q.symbol, price: q.price, likes: l.likes || 0 };
       return res.json({ stockData });
     }
@@ -140,4 +140,4 @@ router.get('/stock-prices', async (req, res) => {
   }
 });
 
-export default router;
+module.exports = router;
