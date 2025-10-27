@@ -7,7 +7,7 @@ const path = require('path');
 const fs = require('fs');
 
 const apiRoutes = require('./routes/api.js');
-const fccTestingRoutes = require('./routes/fcctesting.js'); // boilerplate FCC
+const fccTestingRoutes = require('./routes/fcctesting.js'); // rutas oficiales FCC
 const runner = require('./test-runner.js');
 
 dotenv.config();
@@ -45,54 +45,29 @@ if (MONGO_URI) {
 }
 
 /* ------------------------------------------------------------------
-   ✅ 1) NUESTRAS RUTAS RÁPIDAS PRIMERO (para que tengan prioridad)
+   1) Endpoints utilitarios (no tocan get-tests)
    ------------------------------------------------------------------ */
 app.get('/_api/ping', (_req, res) => {
   console.log('[PATCH] /_api/ping');
   res.json({ ok: true, ts: Date.now() });
 });
 
-app.get('/_api/get-tests', (_req, res) => {
-  try {
-    console.log('[PATCH] /_api/get-tests');
-    const filePath = path.join(__dirname, 'tests', '2_functional-tests.js');
-    const src = fs.readFileSync(filePath, 'utf8');
-    const tests = [];
-    const re = /it\s*\(\s*['"`]([^'"`]+)['"`]\s*,/g;
-    let m;
-    while ((m = re.exec(src)) !== null) tests.push(m[1]);
-    res.json({ status: 'ok', count: tests.length, tests });
-  } catch (e) {
-    console.error('[PATCH] get-tests error:', e.message);
-    res.status(500).json({ status: 'error', error: e.message });
-  }
-});
-
-/* Flag para no ejecutar Mocha dos veces */
+// Evitamos doble ejecución manual del runner
 let testsRunning = false;
-
 app.get('/_api/run-tests', (_req, res) => {
-  try {
-    console.log('[PATCH] /_api/run-tests -> request');
-    if (testsRunning) {
-      console.log('[PATCH] runner already running');
-      return res.json({ status: 'running' });
-    }
-    testsRunning = true;
-    setTimeout(() => {
-      try { runner.run(); } catch (e) { console.error('[PATCH] runner error:', e.message); }
-      // pequeña ventana para no repetir; el validador no necesita re-ejecutar
-      setTimeout(() => { testsRunning = false; }, 5000);
-    }, 250);
-    res.json({ status: 'running' });
-  } catch (e) {
-    console.error('[PATCH] run-tests error:', e.message);
-    res.status(500).json({ status: 'error', error: e.message });
-  }
+  console.log('[PATCH] /_api/run-tests -> request');
+  if (testsRunning) return res.json({ status: 'running' });
+  testsRunning = true;
+  setTimeout(() => {
+    try { runner.run(); } catch (e) { console.error('[PATCH] runner error:', e.message); }
+    // liberamos el flag unos segundos después
+    setTimeout(() => { testsRunning = false; }, 5000);
+  }, 250);
+  res.json({ status: 'running' });
 });
 
 /* ------------------------------------------------------------------
-   2) Luego montamos el boilerplate de FCC (por si lo necesitan)
+   2) Rutas oficiales del runner FCC (incluye /_api/get-tests)
    ------------------------------------------------------------------ */
 fccTestingRoutes(app);
 console.log('[BOOT] Mounted FCC testing routes');
