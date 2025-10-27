@@ -23,7 +23,7 @@ const stockSchema = new mongoose.Schema(
 
 const Stock = mongoose.models.Stock || mongoose.model('Stock', stockSchema);
 
-/* ✅ Fallback en memoria si no hay conexión a Mongo (para pasar tests de FCC) */
+/* ✅ Fallback en memoria si no hay conexión a Mongo */
 const memoryStore = new Map(); // symbol -> { likes: number, ipHashes: Set<string> }
 
 /* --- Helpers --- */
@@ -49,7 +49,6 @@ function anonymizeIp(ipRaw) {
 /* --- Proxy fetch robusto --- */
 async function fetchQuote(symbolRaw) {
   const symbol = normalizeSymbol(symbolRaw);
-
   const makeUrl = (path) => new URL(path, PROXY_URL).toString();
 
   const candidates = [
@@ -74,7 +73,7 @@ async function fetchQuote(symbolRaw) {
 
       return { symbol: data.symbol.toUpperCase(), price: data.latestPrice };
     } catch (e) {
-      lastErr = e; // prueba siguiente variante
+      lastErr = e;
     }
   }
   throw lastErr || new Error('Proxy unreachable');
@@ -82,7 +81,6 @@ async function fetchQuote(symbolRaw) {
 
 /* --- Likes con fallback a memoria --- */
 async function likeIfNeeded(symbol, ipHash, likeFlag) {
-  // Si no hay conexión a MongoDB, usar memoria
   if (!mongoose.connection.readyState) {
     let entry = memoryStore.get(symbol);
     if (!entry) {
@@ -96,7 +94,6 @@ async function likeIfNeeded(symbol, ipHash, likeFlag) {
     return { symbol, likes: entry.likes };
   }
 
-  // Flujo con MongoDB
   const doc = await Stock.findOne({ symbol });
   if (!doc) {
     const initial = likeFlag ? 1 : 0;
@@ -130,7 +127,6 @@ router.get('/stock-prices', async (req, res) => {
     }
 
     if (Array.isArray(stock)) {
-      // two stocks
       const s1 = normalizeSymbol(stock[0]);
       const s2 = normalizeSymbol(stock[1]);
       const [q1, q2] = await Promise.all([fetchQuote(s1), fetchQuote(s2)]);
@@ -149,7 +145,6 @@ router.get('/stock-prices', async (req, res) => {
 
       return res.json({ stockData });
     } else {
-      // single stock
       const s = normalizeSymbol(stock);
       const q = await fetchQuote(s);
       const l = await likeIfNeeded(q.symbol, ipHash, like);
