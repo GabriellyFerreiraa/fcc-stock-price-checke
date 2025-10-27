@@ -9,23 +9,27 @@ dotenv.config();
 
 const app = express();
 
-/* ✅ CSP EXACTA con Helmet (requerida por el test #2) */
+/* ============================
+   🔒 Seguridad (CSP exacta FCC)
+   ============================
+   - Desactivamos la CSP global de Helmet.
+   - Aplicamos SOLO estas 3 directivas con 'self':
+       default-src, script-src, style-src
+   - No agregamos defaults para que no se cuelen otras directivas.
+*/
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(
-  helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"],
-        styleSrc: ["'self'"],
-      },
+  helmet.contentSecurityPolicy({
+    useDefaults: false,
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'"],
     },
-    // Evita headers que a veces rompen en entornos de prueba/deploy
-    crossOriginEmbedderPolicy: false,
-    crossOriginResourcePolicy: { policy: 'same-site' },
   })
 );
 
-/* Evitar 304/caché para que siempre viaje la cabecera CSP */
+// Evitar cacheos que pueden ocultar la cabecera en el runner de FCC
 app.disable('etag');
 app.use((req, res, next) => {
   res.set('Cache-Control', 'no-store');
@@ -36,7 +40,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Mongo
+// Mongo (opcional para FCC; si no conecta, likes usan fallback en memoria)
 const MONGO_URI =
   process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/fcc-stock';
 
