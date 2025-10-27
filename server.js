@@ -7,7 +7,7 @@ const path = require('path');
 const fs = require('fs');
 
 const apiRoutes = require('./routes/api.js');
-const fccTestingRoutes = require('./routes/fcctesting.js');
+const fccTestingRoutes = require('./routes/fcctesting.js'); // boilerplate FCC
 const runner = require('./test-runner.js');
 
 dotenv.config();
@@ -25,7 +25,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Evitar caché (que siempre vean la CSP correcta)
+// Evitar caché (para que el validador siempre lea la CSP correcta)
 app.disable('etag');
 app.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 
@@ -38,31 +38,30 @@ app.use(express.urlencoded({ extended: true }));
 const MONGO_URI = process.env.MONGO_URI;
 if (MONGO_URI) {
   mongoose.connect(MONGO_URI)
-    .then(() => console.log('Mongo connected'))
-    .catch(err => console.error('Mongo error:', err.message));
+    .then(() => console.log('[BOOT] Mongo connected'))
+    .catch(err => console.error('[BOOT] Mongo error:', err.message));
 } else {
-  console.log('Mongo disabled (using in-memory likes)');
+  console.log('[BOOT] Mongo disabled (using in-memory likes)');
 }
 
-/* -----------------------------------------------------------
-   Montamos primero el boilerplate de FCC (NO lo editamos)
-   ----------------------------------------------------------- */
+/* ------------------------------------------------------------------
+   1) Montamos el boilerplate de FCC (NO editamos ese archivo)
+   ------------------------------------------------------------------ */
 fccTestingRoutes(app);
+console.log('[BOOT] Mounted FCC testing routes');
 
-/* -----------------------------------------------------------
-   ENDPOINTS PROPIOS -> con logs y PRIORIDAD (van DESPUÉS)
-   para asegurar que no se cuelgue /_api/get-tests y que
-   exista /_api/run-tests aunque el boilerplate falle.
-   ----------------------------------------------------------- */
-
+/* ------------------------------------------------------------------
+   2) Añadimos endpoints “rápidos” para evitar cuelgues en Render
+      (si fallan, el boilerplate ya está montado igual)
+   ------------------------------------------------------------------ */
 app.get('/_api/ping', (_req, res) => {
-  console.log('[FCC PATCH] /_api/ping');
+  console.log('[PATCH] /_api/ping');
   res.json({ ok: true, ts: Date.now() });
 });
 
-app.get('/_api/get-tests', (req, res) => {
+app.get('/_api/get-tests', (_req, res) => {
   try {
-    console.log('[FCC PATCH] /_api/get-tests (fast)');
+    console.log('[PATCH] /_api/get-tests');
     const filePath = path.join(__dirname, 'tests', '2_functional-tests.js');
     const src = fs.readFileSync(filePath, 'utf8');
     const tests = [];
@@ -71,34 +70,31 @@ app.get('/_api/get-tests', (req, res) => {
     while ((m = re.exec(src)) !== null) tests.push(m[1]);
     res.json({ status: 'ok', count: tests.length, tests });
   } catch (e) {
-    console.error('[FCC PATCH] get-tests error:', e.message);
+    console.error('[PATCH] get-tests error:', e.message);
     res.status(500).json({ status: 'error', error: e.message });
   }
 });
 
 app.get('/_api/run-tests', (_req, res) => {
   try {
-    console.log('[FCC PATCH] /_api/run-tests -> starting runner');
+    console.log('[PATCH] /_api/run-tests -> starting runner');
     setTimeout(() => {
       try { runner.run(); }
-      catch (e) { console.error('[FCC PATCH] runner error:', e.message); }
+      catch (e) { console.error('[PATCH] runner error:', e.message); }
     }, 250);
     res.json({ status: 'running' });
   } catch (e) {
-    console.error('[FCC PATCH] run-tests error:', e.message);
+    console.error('[PATCH] run-tests error:', e.message);
     res.status(500).json({ status: 'error', error: e.message });
   }
 });
 
 /* ----------------- Página e API del proyecto ----------------- */
-
-// Home del boilerplate
 app.get('/', (_req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
 
-// Tu API
-app.use('/api', apiRoutes);
+app.use('/api', apiRoutes); // << asegúrate que routes/api.js exporta module.exports = router
 
 // Estáticos mínimos (opcional)
 app.get('/style.css', (_req, res) => {
@@ -111,13 +107,13 @@ app.get('/client.js', (_req, res) => {
 // Listener (también en NODE_ENV=test para Render)
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`[BOOT] Server running on http://localhost:${PORT}`);
 
   if (process.env.NODE_ENV === 'test') {
-    console.log('Running Tests (boot)...');
+    console.log('[BOOT] Running Tests (on boot)...');
     setTimeout(() => {
       try { runner.run(); }
-      catch (e) { console.log('Tests are not valid:'); console.error(e); }
+      catch (e) { console.log('[BOOT] Tests are not valid:'); console.error(e); }
     }, 1500);
   }
 });
