@@ -25,7 +25,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Evitar caché
+// Evitar caché (que siempre vean la CSP correcta)
 app.disable('etag');
 app.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 
@@ -44,52 +44,63 @@ if (MONGO_URI) {
   console.log('Mongo disabled (using in-memory likes)');
 }
 
-/* ------------------------------------------------------------------
-   Endpoints rápidos para el runner de FCC (sin tocar fcctesting.js)
-   ------------------------------------------------------------------ */
-// Devuelve los títulos de los tests leyendo tests/2_functional-tests.js.
-// Si algo falla, pasa a la ruta original de FCC con next().
-app.get('/_api/get-tests', (req, res, next) => {
+/* -----------------------------------------------------------
+   Montamos primero el boilerplate de FCC (NO lo editamos)
+   ----------------------------------------------------------- */
+fccTestingRoutes(app);
+
+/* -----------------------------------------------------------
+   ENDPOINTS PROPIOS -> con logs y PRIORIDAD (van DESPUÉS)
+   para asegurar que no se cuelgue /_api/get-tests y que
+   exista /_api/run-tests aunque el boilerplate falle.
+   ----------------------------------------------------------- */
+
+app.get('/_api/ping', (_req, res) => {
+  console.log('[FCC PATCH] /_api/ping');
+  res.json({ ok: true, ts: Date.now() });
+});
+
+app.get('/_api/get-tests', (req, res) => {
   try {
+    console.log('[FCC PATCH] /_api/get-tests (fast)');
     const filePath = path.join(__dirname, 'tests', '2_functional-tests.js');
     const src = fs.readFileSync(filePath, 'utf8');
     const tests = [];
     const re = /it\s*\(\s*['"`]([^'"`]+)['"`]\s*,/g;
     let m;
     while ((m = re.exec(src)) !== null) tests.push(m[1]);
-    return res.json({ status: 'ok', count: tests.length, tests });
+    res.json({ status: 'ok', count: tests.length, tests });
   } catch (e) {
-    return next(); // delega al fcctesting.js
+    console.error('[FCC PATCH] get-tests error:', e.message);
+    res.status(500).json({ status: 'error', error: e.message });
   }
 });
 
-// Dispara el runner sin bloquear la respuesta.
-// Si falla, delega a la ruta original (si existe).
-app.get('/_api/run-tests', (req, res, next) => {
+app.get('/_api/run-tests', (_req, res) => {
   try {
+    console.log('[FCC PATCH] /_api/run-tests -> starting runner');
     setTimeout(() => {
-      try { runner.run(); } catch {}
+      try { runner.run(); }
+      catch (e) { console.error('[FCC PATCH] runner error:', e.message); }
     }, 250);
-    return res.json({ status: 'running' });
+    res.json({ status: 'running' });
   } catch (e) {
-    return next();
+    console.error('[FCC PATCH] run-tests error:', e.message);
+    res.status(500).json({ status: 'error', error: e.message });
   }
 });
 
-/* ----------------- FIN “patch” de runner ----------------- */
-
-// Rutas oficiales del runner de FCC (no editamos ese archivo)
-fccTestingRoutes(app);
+/* ----------------- Página e API del proyecto ----------------- */
 
 // Home del boilerplate
 app.get('/', (_req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
 
-// API del proyecto
+// Tu API
 app.use('/api', apiRoutes);
 
-// Endpoints mínimos locales (útiles para validar script/style desde 'self')
+// Estáticos mínimos (opcional)
 app.get('/style.css', (_req, res) => {
   res.type('text/css').send('/* ok */ body{font-family:system-ui,Segoe UI,Arial,sans-serif;}');
 });
@@ -103,7 +114,7 @@ app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 
   if (process.env.NODE_ENV === 'test') {
-    console.log('Running Tests...');
+    console.log('Running Tests (boot)...');
     setTimeout(() => {
       try { runner.run(); }
       catch (e) { console.log('Tests are not valid:'); console.error(e); }
