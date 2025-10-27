@@ -7,8 +7,6 @@ const path = require('path');
 const fs = require('fs');
 
 const apiRoutes = require('./routes/api.js');
-const fccTestingRoutes = require('./routes/fcctesting.js'); // rutas oficiales FCC
-const runner = require('./test-runner.js');
 
 dotenv.config();
 
@@ -44,33 +42,82 @@ if (MONGO_URI) {
   console.log('[BOOT] Mongo disabled (using in-memory likes)');
 }
 
-/* ------------------------------------------------------------------
-   1) Endpoints utilitarios (no tocan get-tests)
-   ------------------------------------------------------------------ */
+/* ----------------- Endpoints utilitarios ----------------- */
 app.get('/_api/ping', (_req, res) => {
   console.log('[PATCH] /_api/ping');
   res.json({ ok: true, ts: Date.now() });
 });
 
-// Evitamos doble ejecución manual del runner
+/* ----------------- Ejecutar Mocha bajo demanda -----------------
+   - Devuelve resultados de cada test (estado, mensaje, duración)
+   - Evita ejecuciones concurrentes
+----------------------------------------------------------------- */
 let testsRunning = false;
-app.get('/_api/run-tests', (_req, res) => {
-  console.log('[PATCH] /_api/run-tests -> request');
-  if (testsRunning) return res.json({ status: 'running' });
-  testsRunning = true;
-  setTimeout(() => {
-    try { runner.run(); } catch (e) { console.error('[PATCH] runner error:', e.message); }
-    // liberamos el flag unos segundos después
-    setTimeout(() => { testsRunning = false; }, 5000);
-  }, 250);
-  res.json({ status: 'running' });
-});
 
-/* ------------------------------------------------------------------
-   2) Rutas oficiales del runner FCC (incluye /_api/get-tests)
-   ------------------------------------------------------------------ */
-fccTestingRoutes(app);
-console.log('[BOOT] Mounted FCC testing routes');
+app.get('/_api/get-tests', async (_req, res) => {
+  try {
+    if (testsRunning) {
+      return res.json({ status: 'running' });
+    }
+    // Aseguramos que el archivo existe
+    const testsFile = path.join(__dirname, 'tests', '2_functional-tests.js');
+    if (!fs.existsSync(testsFile)) {
+      return res.status(500).json({ status: 'error', error: 'Tests file not found' });
+    }
+
+    testsRunning = true;
+
+    const Mocha = require('mocha');
+    const mocha = new Mocha({
+      timeout: 20000,      // da tiempo de sobra para las peticiones al proxy
+      color: false
+    });
+
+    // IMPORTANTE: limpiar caché para recargar el archivo de tests si Render reusa proceso
+    delete require.cache[require.resolve(testsFile)];
+    mocha.addFile(testsFile);
+
+    const results = [];
+    const runner = mocha.run(() => {
+      testsRunning = false;
+    });
+
+    runner.on('pass', test => {
+      results.push({
+        title: test.title,
+        fullTitle: test.fullTitle(),
+        state: 'passed',
+        duration: test.duration
+      });
+    });
+
+    runner.on('fail', (test, err) => {
+      results.push({
+        title: test.title,
+        fullTitle: test.fullTitle(),
+        state: 'failed',
+        err: (err && (err.message || String(err))) || 'Unknown error'
+      });
+    });
+
+    runner.on('end', () => {
+      res.json({
+        status: 'finished',
+        stats: {
+          tests: runner.stats.tests,
+          passes: runner.stats.passes,
+          failures: runner.stats.failures,
+          duration: runner.stats.duration
+        },
+        tests: results
+      });
+    });
+  } catch (e) {
+    testsRunning = false;
+    console.error('[PATCH] get-tests error:', e);
+    res.status(500).json({ status: 'error', error: e.message || String(e) });
+  }
+});
 
 /* ----------------- Página e API del proyecto ----------------- */
 app.get('/', (_req, res) => {
@@ -87,21 +134,10 @@ app.get('/client.js', (_req, res) => {
   res.type('application/javascript').send('/* ok */ console.log("client.js loaded from self");');
 });
 
-// Listener (también en NODE_ENV=test para Render)
+// Listener
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`[BOOT] Server running on http://localhost:${PORT}`);
-
-  if (process.env.NODE_ENV === 'test') {
-    console.log('[BOOT] Running Tests (on boot) ...');
-    if (!testsRunning) {
-      testsRunning = true;
-      setTimeout(() => {
-        try { runner.run(); } catch (e) { console.log('[BOOT] Tests invalid:'); console.error(e); }
-        setTimeout(() => { testsRunning = false; }, 5000);
-      }, 1500);
-    }
-  }
 });
 
 module.exports = app;
