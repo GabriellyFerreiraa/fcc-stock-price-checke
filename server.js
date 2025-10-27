@@ -31,10 +31,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* ================================
-   Mongo OPCIONAL
+/* ========== Mongo OPCIONAL ==========
    - Si NO hay MONGO_URI => NO conectamos y usamos fallback en memoria
-   ================================ */
+   =================================== */
 const MONGO_URI = process.env.MONGO_URI; // <- sin default
 if (MONGO_URI) {
   mongoose
@@ -74,10 +73,8 @@ app.get('/client.js', (_req, res) => {
   res.type('application/javascript').send('/* ok */ console.log("client.js loaded from self");');
 });
 
-// listener
+// ✅ SIEMPRE escuchar (también cuando NODE_ENV=test en Render)
 const PORT = process.env.PORT || 3000;
-if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
-}
+app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
 
 export default app;
