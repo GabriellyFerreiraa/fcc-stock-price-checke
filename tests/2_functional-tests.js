@@ -5,12 +5,12 @@ import app from '../server.js';
 const { assert } = chai;
 chai.use(chaiHttp);
 
-// Helper symbols (usa símbolos líquidos típicos del proxy)
+// Symbols para el proxy de FCC
 const S1 = 'GOOG';
 const S2 = 'MSFT';
 
 describe('Functional Tests - /api/stock-prices', function () {
-  this.timeout(10000);
+  this.timeout(15000); // un poco más generoso por latencias del proxy
 
   // 1) Viewing one stock
   it('Viewing one stock: GET /api/stock-prices?stock=GOOG', async () => {

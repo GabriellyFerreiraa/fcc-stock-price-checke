@@ -9,19 +9,23 @@ dotenv.config();
 
 const app = express();
 
-/* 1) Helmet SIN su CSP interno (para no sobrescribir la cabecera que
-      necesita freeCodeCamp en el test #2) */
-app.use(helmet({ contentSecurityPolicy: false }));
+/* ✅ CSP EXACTA con Helmet (requerida por el test #2) */
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'"],
+      },
+    },
+    // Evita headers que a veces rompen en entornos de prueba/deploy
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: 'same-site' },
+  })
+);
 
-/* 2) CSP EXACTA que valida freeCodeCamp (#2):
-      solo permitir scripts y estilos desde 'self' y con default-src */
-const FCC_CSP = "default-src 'self'; script-src 'self'; style-src 'self';";
-app.use((req, res, next) => {
-  res.set('Content-Security-Policy', FCC_CSP);
-  next();
-});
-
-/* 3) Evitar 304/caché para que siempre viaje la cabecera CSP */
+/* Evitar 304/caché para que siempre viaje la cabecera CSP */
 app.disable('etag');
 app.use((req, res, next) => {
   res.set('Cache-Control', 'no-store');
@@ -33,7 +37,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Mongo
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/fcc-stock';
+const MONGO_URI =
+  process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/fcc-stock';
+
 mongoose
   .connect(MONGO_URI)
   .then(() => console.log('Mongo connected'))
@@ -42,7 +48,7 @@ mongoose
 // Rutas API
 app.use('/api', apiRouter);
 
-// Página raíz en HTML (status 200) — el test de FCC consulta aquí
+// Página raíz simple (FCC hace GET aquí)
 app.get('/', (_req, res) => {
   res.send(`<!DOCTYPE html>
   <html lang="en">
@@ -59,13 +65,17 @@ app.get('/', (_req, res) => {
 
 // CSS mínimo para evitar 404
 app.get('/style.css', (_req, res) => {
-  res.type('text/css').send('/* ok */ body{font-family:system-ui,Segoe UI,Arial,sans-serif;}');
+  res
+    .type('text/css')
+    .send('/* ok */ body{font-family:system-ui,Segoe UI,Arial,sans-serif;}');
 });
 
 // Arranque
 const PORT = process.env.PORT || 3000;
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+  app.listen(PORT, () =>
+    console.log(`Server running on http://localhost:${PORT}`)
+  );
 }
 
 export default app;
