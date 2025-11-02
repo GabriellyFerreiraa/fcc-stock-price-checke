@@ -9,7 +9,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/GabriellyFerreiraa/fcc-stock-price-checke.git"
@@ -20,15 +20,14 @@
   "homepage": "https://github.com/GabriellyFerreiraa/fcc-stock-price-checke#readme",
   "dependencies": {
     "cors": "^2.8.5",
-    "dotenv": "^17.2.3",
-    "express": "^5.1.0",
-    "helmet": "^8.1.0",
-    "mongoose": "^8.19.2",
-    "node-fetch": "^3.3.2"
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "helmet": "^7.0.0",
+    "mongoose": "^8.6.0"
   },
   "devDependencies": {
-    "chai": "^6.2.0",
-    "chai-http": "^5.1.2",
-    "mocha": "^11.7.4"
+    "chai": "4.3.10",
+    "chai-http": "4.4.0",
+    "mocha": "10.7.0"
   }
 }
